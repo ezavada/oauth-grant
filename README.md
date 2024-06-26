@@ -1,4 +1,4 @@
-CLI to execute Device Authorization Grant Flow
+# CLI to execute Device Authorization Grant Flow
 
 OAuth Idenity Provider with Device Authorization Grant flow enabled, having Issuer : http://localhost:8080/realms/deviceflow and Client ID : device-test-client - we can run the CLI as follows:
 
