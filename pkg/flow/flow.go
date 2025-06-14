@@ -6,55 +6,32 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
-func OauthFlow(issuer, clientID, flow string) (string, error) {
-	var provider *OauthProvider
-	var token string
-	provider, err := initializeOauthProvider(issuer)
-	if err != nil {
-		return "", err
-	}
-	switch flow {
-	case "device":
-		token, err = GetDeviceFlowToken(provider, clientID)
-	default:
-		return "", fmt.Errorf("unsupported oauth flow: %s", flow)
-	}
-	if err != nil {
-		return "", err
-	} else {
-		return token, nil
-	}
+const (
+	githubDeviceAuthEndpoint = "https://github.com/login/device/code"
+	githubTokenEndpoint      = "https://github.com/login/oauth/access_token"
+)
 
+func OauthFlow(clientID string) (string, error) {
+	return GetGitHubDeviceFlowToken(clientID)
 }
 
-func initializeOauthProvider(url string) (*OauthProvider, error) {
-	var provider *OauthProvider
-	res, err := http.Get(url + "/.well-known/openid-configuration")
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
-	}
-	if err = json.Unmarshal(body, &provider); err != nil {
-		return nil, err
-	}
-	return provider, nil
-}
-
-func GetDeviceFlowToken(provider *OauthProvider, clientID string) (string, error) {
-
+func GetGitHubDeviceFlowToken(clientID string) (string, error) {
 	values := url.Values{}
 	values.Add("client_id", clientID)
-	values.Add("scope", "openid email")
+	values.Add("scope", "read:user user:email") // GitHub specific scopes
 
-	resp, err := http.PostForm(provider.DeviceAuthEndpoint, values)
+	req, err := http.NewRequest("POST", githubDeviceAuthEndpoint, strings.NewReader(values.Encode()))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -67,28 +44,36 @@ func GetDeviceFlowToken(provider *OauthProvider, clientID string) (string, error
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("status code: %s ", resp.Status)
 	}
+
 	var dr DeviceResp
 	if err := json.Unmarshal(b, &dr); err != nil {
-		return "", fmt.Errorf("error while unmarshling token: %s", err)
+		return "", fmt.Errorf("error while unmarshaling device response: %s", err)
 	}
-	uric := dr.VerificationURIComplete
+
 	uri := dr.VerificationURI
+	uric := dr.VerificationURIComplete
 	if uri == "" {
 		uri = dr.VerificationURI
 	}
+
 	fmt.Printf("\nOpen link : %s in browser and enter verification code %s\n", uri, dr.UserCode)
 	fmt.Printf("\nOr open link : %s directly in the browser\n", uric)
-
 	fmt.Printf("\nCode will be valid for %d seconds\n", dr.ExpiresIn)
 
 	for {
 		values := url.Values{}
-		values.Add("grant_type", "urn:ietf:params:oauth:grant-type:device_code")
 		values.Add("client_id", clientID)
 		values.Add("device_code", dr.DeviceCode)
-		values.Add("scope", "openid email")
+		values.Add("grant_type", "urn:ietf:params:oauth:grant-type:device_code")
 
-		resp, err := http.PostForm(provider.TokenEndpoint, values)
+		req, err := http.NewRequest("POST", githubTokenEndpoint, strings.NewReader(values.Encode()))
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			return "", err
 		}
@@ -98,32 +83,38 @@ func GetDeviceFlowToken(provider *OauthProvider, clientID string) (string, error
 		if err != nil {
 			return "", err
 		}
-		otr := OIDCTokenResponse{}
-		if err := json.Unmarshal(b, &otr); err != nil {
+
+		var tokenResp struct {
+			AccessToken string `json:"access_token"`
+			TokenType   string `json:"token_type"`
+			Error       string `json:"error"`
+		}
+
+		if err := json.Unmarshal(b, &tokenResp); err != nil {
 			return "", err
 		}
 
-		if otr.AccessToken != "" {
-			fmt.Println("\nTokens received!")
-			val, err := json.MarshalIndent(otr, "", " ")
+		if tokenResp.AccessToken != "" {
+			fmt.Println("\nToken received!")
+			val, err := json.MarshalIndent(tokenResp, "", " ")
 			if err != nil {
 				return "", err
 			}
 			return string(val), nil
-
 		}
-		switch otr.Error {
+
+		switch tokenResp.Error {
 		case "authorization_pending":
-			fmt.Printf("\n debug: authorization request is still pending as the you have not completed authentication. sleeping for interval: %d\n", dr.Interval)
+			fmt.Printf("\nAuthorization request is still pending. Waiting for %d seconds...\n", dr.Interval)
 			time.Sleep(time.Duration(dr.Interval) * time.Second)
 		case "slow_down":
 			time.Sleep(time.Duration(dr.Interval)*time.Second + 5*time.Second)
 		case "access_denied":
-			return "", fmt.Errorf("the authorization request was denied: %s", otr.Error)
+			return "", fmt.Errorf("the authorization request was denied")
 		case "expired_token":
-			return "", fmt.Errorf("device_code has expired as it is older than: %d", dr.ExpiresIn)
+			return "", fmt.Errorf("device_code has expired")
 		default:
-			return "", fmt.Errorf("unexpected error in the device flow: %s", otr.Error)
+			return "", fmt.Errorf("unexpected error in the device flow: %s", tokenResp.Error)
 		}
 	}
 }
