@@ -1,30 +1,53 @@
 # CLI to execute Device Authorization Grant Flow
 
-OAuth Idenity Provider with Device Authorization Grant flow enabled, having Issuer : http://localhost:8080/realms/deviceflow and Client ID : device-test-client - we can run the CLI as follows:
+Modification of forked project to save a access token in config and reuse it if valid. If expired, use stored refresh token to get a new access token.
+
+GitHub OAuth Identity Provider with Device Flow. Using Client ID : device-test-client - we can run the CLI as follows:
 
 ```
-$ go run cmd/oauth/main.go  -i http://localhost:8080/realms/deviceflow -c device-test-client -f device
+$ go run cmd/oauth/main.go -c device-test-client
 ```
 
 The sample response will be like following:
 
 ```
-$ go run cmd/oauth/main.go  -i http://localhost:8080/realms/deviceflow -c device-test-client -f device
+Open link : https://github.com/login/device in browser and enter verification code APFN-HGMB
 
-Open link : http://localhost:8080/realms/deviceflow/device in browser and enter verification code APFN-HGMB
-
-Or open link : http://localhost:8080/realms/deviceflow/device?user_code=APFN-HGMB directly in the browser
-
-Code will be valid for 600 seconds
+Code will be valid for 28800 seconds
 
 Tokens received!
 Received response: {
- "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJXQUVVWGRTRWdtcEhrckFhRDVmeTBJQlhSc3ZlREZocFNKZUJ2R1AtWG9JIn0.eyJleHAiOjE3MTkzMTMzMDIsImlhdCI6MTcxOTMxMzAwMiwiYXV0aF90aW1lIjoxNzE5MzEyOTk4LCJqdGkiOiIxYmRjODY3Zi1kNTI1LTQ0YTItOTlkZS0xNjE0NTdkMDIwZTMiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjgwODAvcmVhbG1zL2RldmljZWZsb3ciLCJhdWQiOiJhY2NvdW50Iiwic3ViIjoiYTM4YjJjZDYtZDY3YS00Y2NkLWE4ZDAtN2Y5ZjQ0OWU3ZjRmIiwidHlwIjoiQmVhcmVyIiwiYXpwIjoiZGV2aWNlLXRlc3QtY2xpZW50Iiwic2lkIjoiMjhjYzkwMDYtOGI3Yy00OTBkLTk4ZWMtN2U3MjVkODM3YTY4IiwiYWNyIjoiMSIsImFsbG93ZWQtb3JpZ2lucyI6WyJodHRwOi8vbG9jYWxob3N0OjgwODAiXSwicmVhbG1fYWNjZXNzIjp7InJvbGVzIjpbIm9mZmxpbmVfYWNjZXNzIiwidW1hX2F1dGhvcml6YXRpb24iLCJkZWZhdWx0LXJvbGVzLWRldmljZWZsb3ciXX0sInJlc291cmNlX2FjY2VzcyI6eyJhY2NvdW50Ijp7InJvbGVzIjpbIm1hbmFnZS1hY2NvdW50IiwibWFuYWdlLWFjY291bnQtbGlua3MiLCJ2aWV3LXByb2ZpbGUiXX19LCJzY29wZSI6Im9wZW5pZCBlbWFpbCBwcm9maWxlIiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJuYW1lIjoicmlzaGFiaCBzaW5naCIsInByZWZlcnJlZF91c2VybmFtZSI6InJpc2hhYmgiLCJnaXZlbl9uYW1lIjoicmlzaGFiaCIsImZhbWlseV9uYW1lIjoic2luZ2giLCJlbWFpbCI6InJpc2hhYmhAZ21haWwuY29tIn0.Ln_IFSVI_LBQLNvGHRfgBUgDTI_X1dK-86bS9dtfl2tNgk8KH8x1x0a5oTPOy4jR1Ph7LXpV5FJYXIB05KPYhftoJtrsvBsx4uPL9tVB1CQZi89N2j-ChtwKc8DP2rDaAN7ej8ts_cFY6loX0Tx34puKl-WnBVr3ScHsG65PIsK066_8fFx86iiJg7ENaw6u2uNEwhSWqrfyKK-1AgJTnoWH_G_tnV3rc5RCVhUCSsyP1x-p_ddokSnjgc-xdCNVH93S-inuAgO5TnRhm6_m9EYvxXJXa3VoMxXZo7M3yQXyUIb8A-ibRINlxa2GcJPoHczcpdrY5hEkhUUXEiUi-A",
- "token_type": "Bearer",
- "refresh_token": "eyJhbGciOiJIUzUxMiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJlNTNlZDMyZC0zZDU2LTQ1YWItYWI0ZC1kMTExZjU3MzlhZmYifQ.eyJleHAiOjE3MTkzMTQ4MDIsImlhdCI6MTcxOTMxMzAwMiwianRpIjoiNTg3YWViNmEtNTQ4Mi00MDQ2LWI1NzctZGI1NGMzY2M0YjAyIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo4MDgwL3JlYWxtcy9kZXZpY2VmbG93IiwiYXVkIjoiaHR0cDovL2xvY2FsaG9zdDo4MDgwL3JlYWxtcy9kZXZpY2VmbG93Iiwic3ViIjoiYTM4YjJjZDYtZDY3YS00Y2NkLWE4ZDAtN2Y5ZjQ0OWU3ZjRmIiwidHlwIjoiUmVmcmVzaCIsImF6cCI6ImRldmljZS10ZXN0LWNsaWVudCIsInNpZCI6IjI4Y2M5MDA2LThiN2MtNDkwZC05OGVjLTdlNzI1ZDgzN2E2OCIsInNjb3BlIjoib3BlbmlkIGVtYWlsIGJhc2ljIHdlYi1vcmlnaW5zIGFjciBwcm9maWxlIHJvbGVzIn0.0ko6-LOJAYs8m5a0ug-DQyqiuT3N8G5OvBboowRev22LJMp6g2zyVEzg5WxJ5ITO43LJeHKnSxHJJ5P85fiADQ",
- "expires_in": 300,
- "id_token": "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJXQUVVWGRTRWdtcEhrckFhRDVmeTBJQlhSc3ZlREZocFNKZUJ2R1AtWG9JIn0.eyJleHAiOjE3MTkzMTMzMDIsImlhdCI6MTcxOTMxMzAwMiwiYXV0aF90aW1lIjoxNzE5MzEyOTk4LCJqdGkiOiI5NTIzZDdhYi0yYWYzLTRiZDctYWQ3Yi0yYWRmMzhhY2U0MjkiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjgwODAvcmVhbG1zL2RldmljZWZsb3ciLCJhdWQiOiJkZXZpY2UtdGVzdC1jbGllbnQiLCJzdWIiOiJhMzhiMmNkNi1kNjdhLTRjY2QtYThkMC03ZjlmNDQ5ZTdmNGYiLCJ0eXAiOiJJRCIsImF6cCI6ImRldmljZS10ZXN0LWNsaWVudCIsInNpZCI6IjI4Y2M5MDA2LThiN2MtNDkwZC05OGVjLTdlNzI1ZDgzN2E2OCIsImF0X2hhc2giOiJVc1BHc3R3Y3AzNDYyRklmblZoSWZRIiwiYWNyIjoiMSIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwibmFtZSI6InJpc2hhYmggc2luZ2giLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJyaXNoYWJoIiwiZ2l2ZW5fbmFtZSI6InJpc2hhYmgiLCJmYW1pbHlfbmFtZSI6InNpbmdoIiwiZW1haWwiOiJyaXNoYWJoQGdtYWlsLmNvbSJ9.AzKQrek5f7e2K_vknYLO9BrNOOek_ShcisGWGWJEBKUHMsVQcW57R1g3iuqPQzRrot0Bg6KTRalJAtaeN5o0p73vqZ5eWxVKRpjmmYpk9igC8JYWo6MJKqQ-RIFJxKFoe1TI9gAdBxWuNrZMwJF38Z1gDaKtiMg4eDTzH30m58KrrZycDc7-J0LmDDWRDXse0nlLIIReEwvLioODN8l2BIItO0T2vaC9rxzGHE0ruYQulFil6BG2eGHxGcwYXAZcLlwCDBZLMbmW8gmFnDJP1ghFMxbi-11OxemkrCRomU_1dkkF8phkyBajS4cLjRr7bKFj7VokRGdjKTNK4IHfhQ",
+ "access_token": "xxxxx",
+ "token_type": "bearer",
+ "refresh_token": "xxxxx",
+ "expires_in": 28800,
  "error": ""
+}
+```
+
+Alternatively, if there is already a valid token, it will simply say:
+
+```
+Using cached token!
+Received response: {
+ "access_token": "xxxxx",
+ "token_type": "bearer",
+ "refresh_token": "xxxxx",
+ "expires_at": "2025-06-16T17:34:17.543125+02:00"
+}
+```
+
+Finally, if the token has already expired, it will attempt to get a new one via the refresh token:
+
+```
+Token expired, attempting to refresh...
+
+Token refreshed successfully!
+Received response: {
+ "access_token": "xxxxx",
+ "token_type": "bearer",
+ "refresh_token": "xxxxx",
+ "expires_at": "2025-06-16T17:42:02.077096+02:00"
 }
 ```
 
