@@ -10,6 +10,7 @@ import (
 
 type Config struct {
 	ClientId string
+	Verbose  bool
 }
 
 var config Config
@@ -19,12 +20,15 @@ var rootCmd = &cobra.Command{
 	Short: "grant is a command line tool",
 	Long:  `grant is a command line tool for testing Oauth grant flow.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		token, err := flow.OauthFlow(config.ClientId)
+		token, err := flow.OauthFlow(config.ClientId, config.Verbose)
 		if err != nil {
 			fmt.Printf("Oauth flow execution error: %s\n", err)
 			return
 		}
-		fmt.Printf("Received response: %s\n", token)
+		if config.Verbose {
+			fmt.Printf("Received response: %s\n", token)
+		}
+		fmt.Printf("Authorization successful!\n")
 	},
 }
 
@@ -36,6 +40,6 @@ func Execute() {
 }
 
 func init() {
-
 	rootCmd.PersistentFlags().StringVarP(&config.ClientId, "client_id", "c", "", "client ID required to test the flow")
+	rootCmd.PersistentFlags().BoolVarP(&config.Verbose, "verbose", "v", false, "enable verbose output")
 }
