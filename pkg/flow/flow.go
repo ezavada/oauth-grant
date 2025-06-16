@@ -19,10 +19,93 @@ func OauthFlow(clientID string) (string, error) {
 	return GetGitHubDeviceFlowToken(clientID)
 }
 
-func GetGitHubDeviceFlowToken(clientID string) (string, error) {
+func refreshToken(clientID string, refreshToken string) (*TokenConfig, error) {
 	values := url.Values{}
 	values.Add("client_id", clientID)
-	values.Add("scope", "read:user user:email") // GitHub specific scopes
+	values.Add("grant_type", "refresh_token")
+	values.Add("refresh_token", refreshToken)
+
+	req, err := http.NewRequest("POST", githubTokenEndpoint, strings.NewReader(values.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var tokenResp struct {
+		AccessToken  string `json:"access_token"`
+		TokenType    string `json:"token_type"`
+		RefreshToken string `json:"refresh_token"`
+		ExpiresIn    int    `json:"expires_in"`
+		Error        string `json:"error"`
+	}
+
+	if err := json.Unmarshal(b, &tokenResp); err != nil {
+		return nil, err
+	}
+
+	if tokenResp.Error != "" {
+		return nil, fmt.Errorf("error refreshing token: %s", tokenResp.Error)
+	}
+
+	if tokenResp.AccessToken == "" {
+		return nil, fmt.Errorf("no access token received in refresh response")
+	}
+
+	config := &TokenConfig{
+		AccessToken:  tokenResp.AccessToken,
+		TokenType:    tokenResp.TokenType,
+		RefreshToken: tokenResp.RefreshToken,
+		ExpiresAt:    time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second),
+	}
+
+	if err := SaveTokenConfig(*config); err != nil {
+		fmt.Printf("Warning: Failed to save refreshed token configuration: %v\n", err)
+	}
+
+	return config, nil
+}
+
+func GetGitHubDeviceFlowToken(clientID string) (string, error) {
+	// First check if we have a valid token in the config
+	if config, err := LoadTokenConfig(); err == nil && config != nil {
+		// If token is expired but we have a refresh token, try to refresh it
+		if time.Now().After(config.ExpiresAt) && config.RefreshToken != "" {
+			fmt.Println("\nToken expired, attempting to refresh...")
+			newConfig, err := refreshToken(clientID, config.RefreshToken)
+			if err == nil && newConfig != nil {
+				fmt.Println("\nToken refreshed successfully!")
+				val, err := json.MarshalIndent(newConfig, "", " ")
+				if err != nil {
+					return "", err
+				}
+				return string(val), nil
+			}
+			fmt.Printf("\nFailed to refresh token: %v\n", err)
+		} else if time.Now().Before(config.ExpiresAt) {
+			fmt.Println("\nUsing cached token!")
+			val, err := json.MarshalIndent(config, "", " ")
+			if err != nil {
+				return "", err
+			}
+			return string(val), nil
+		}
+	}
+
+	values := url.Values{}
+	values.Add("client_id", clientID)
+	values.Add("scope", "read:user user:email repo workflow write:packages read:org") // Expanded GitHub scopes
 
 	req, err := http.NewRequest("POST", githubDeviceAuthEndpoint, strings.NewReader(values.Encode()))
 	if err != nil {
@@ -85,9 +168,11 @@ func GetGitHubDeviceFlowToken(clientID string) (string, error) {
 		}
 
 		var tokenResp struct {
-			AccessToken string `json:"access_token"`
-			TokenType   string `json:"token_type"`
-			Error       string `json:"error"`
+			AccessToken  string `json:"access_token"`
+			TokenType    string `json:"token_type"`
+			RefreshToken string `json:"refresh_token"`
+			ExpiresIn    int    `json:"expires_in"`
+			Error        string `json:"error"`
 		}
 
 		if err := json.Unmarshal(b, &tokenResp); err != nil {
@@ -96,6 +181,19 @@ func GetGitHubDeviceFlowToken(clientID string) (string, error) {
 
 		if tokenResp.AccessToken != "" {
 			fmt.Println("\nToken received!")
+
+			// Save token configuration
+			config := TokenConfig{
+				AccessToken:  tokenResp.AccessToken,
+				TokenType:    tokenResp.TokenType,
+				RefreshToken: tokenResp.RefreshToken,
+				ExpiresAt:    time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second),
+			}
+
+			if err := SaveTokenConfig(config); err != nil {
+				fmt.Printf("Warning: Failed to save token configuration: %v\n", err)
+			}
+
 			val, err := json.MarshalIndent(tokenResp, "", " ")
 			if err != nil {
 				return "", err
